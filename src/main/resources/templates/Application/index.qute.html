@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://unpkg.com/hyperscript.org@0.9.7"></script>
+    <script src="https://unpkg.com/htmx.org@1.8.0"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.3.1/dist/jquery.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/fomantic-ui@2.8.8/dist/semantic.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/fomantic-ui@2.8.8/dist/semantic.min.js"></script>
+
+    <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.js"
+            integrity="sha512-3S64QagKiTlNjSfuh3UYtYSkP494WHoWc96YvbmB2BReHpNtxlrMNY6MbJLDpavcgD8Pj5p44F/PY586uVO5iA=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    ></script>
+    <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/sql/sql.min.js"
+            integrity="sha512-JOURLWZEM9blfKvYn1pKWvUZJeFwrkn77cQLJOS6M/7MVIRdPacZGNm2ij5xtDV/fpuhorOswIiJF3x/woe5fw=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    ></script>
+    <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/addon/hint/show-hint.min.js"
+            integrity="sha512-yhmeAerubMLaGAsyS7sE8Oqub6GeTkBDQpkXo2JKHgg7JOCudQvcbDQc5rPxdl7MqcDusTJzSy+ODlyzAwETfQ=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    ></script>
+    <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/addon/hint/sql-hint.min.js"
+            integrity="sha512-O7YCIZwiyJYc9d/iPOSgEzhhlonTMGcmM1HmgYFffj5cGwVu2PLSzTaLvD9HSk8rSSf9rIpdhJPk8Yhu6wJBtA=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    ></script>
+    <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.css"
+            integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    />
+    <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/addon/hint/show-hint.min.css"
+            integrity="sha512-OmcLQEy8iGiD7PSm85s06dnR7G7C9C0VqahIPAj/KHk5RpOCmnC6R2ob1oK4/uwYhWa9BF1GC6tzxsC8TIx7Jg=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    />
+    <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/theme/juejin.min.css"
+            integrity="sha512-FpFNwHMUkU0AE2bj1ZJ+Spvq40Mb+G23FZyXdWBOnDXXqlixT/aXNBauBvPMao82l98G26LC6HVYo44Pg3pwyg=="
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
+    />
+</head>
+
+<body>
+<div class="ui inverted menu" style="border-radius: 0">
+    <div class="header item">
+        <img src="/calcite-logo.svg" alt="Calcite Logo" style="width: 200px;">
+    </div>
+    <div class="right menu">
+        <a class="item" href="https://calcite.apache.org/">Calcite v1.32.0</a>
+    </div>
+</div>
+
+<div class="ui middle aligned grid">
+    <div class="column">
+        <div class="ui text container">
+            <h2 class="ui header">
+                SQL Query:
+            </h2>
+
+            <form class="ui form"
+                  onsubmit="event.preventDefault()"
+                  hx-post="/query"
+                  hx-target="#query-results"
+                  hx-swap="innerHTML"
+                  _="on htmx:afterRequest remove .active from #loading-modal
+                     on htmx:afterOnLoad js $('#query-results table').attr('class', 'ui celled table')">
+                <div class="field">
+                    <textarea name="query" id="editor"></textarea>
+                </div>
+                <button id="run" type="submit" class="ui button primary"
+                        _="on click add .active to #loading-modal">
+                    Run Query
+                </button>
+                <button type="submit" id="explain" class="ui button">
+                    Explain Query
+                </button>
+                <button class="ui button right floated" hx-get="/schema">
+                    Show Schema
+                </button>
+            </form>
+
+            <div id="loading-modal" class="ui inverted dimmer">
+                <div class="ui text loader">Loading</div>
+            </div>
+
+            <h2 class="ui header">
+                Results:
+            </h2>
+            <div class="ui celled table" id="query-results">
+
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+
+<script>
+    const editor = CodeMirror.fromTextArea(document.getElementById("editor"), {
+        lineNumbers: true,
+        mode: "sql",
+        theme: "juejin",
+        hint: CodeMirror.hint.sql,
+        extraKeys: {
+            "Ctrl-Space": "autocomplete",
+        },
+    })
+    // language=SQL format=false
+    const exampleQuery = `
+SELECT
+	Artist.ArtistId, Artist.Name, Album.Title
+FROM
+	chinook.public.Artist JOIN chinook.public.Album USING (ArtistId)
+GROUP BY
+	Artist.ArtistId, Artist.Name, Album.Title
+ORDER BY
+	Artist.Name ASC
+LIMIT 5
+`.trim()
+
+    editor.getDoc().setValue(exampleQuery)
+
+    const explainButton = document.getElementById("explain")
+    explainButton.addEventListener("click", (e) => {
+        e.preventDefault()
+        const query = editor.getDoc().getValue()
+        editor.getDoc().setValue("EXPLAIN PLAN FOR " + query)
+        document.getElementById("run").click()
+    })
+</script>
+</html>
